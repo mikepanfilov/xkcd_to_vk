@@ -3,9 +3,11 @@ import random
 import requests
 from dotenv import load_dotenv
 
+MAX_PAGES = 2394
+
 
 def get_comic_from_xkcd(comic_filename):
-    page_number = random.randrange(1, 2394)
+    page_number = random.randrange(1, MAX_PAGES)
     url = f'https://xkcd.com/{page_number}/info.0.json'
     response = requests.get(url)
     response.raise_for_status()
@@ -24,7 +26,6 @@ def upload_to_vk_server(token, group_id, comic_filename):
         }
     url = 'https://api.vk.com/method/photos.getWallUploadServer'
     response = requests.get(url, params=payload)
-    response.raise_for_status()
     upload_url = response.json()['response']['upload_url']
 
     with open(comic_filename, 'rb') as file:
@@ -32,12 +33,11 @@ def upload_to_vk_server(token, group_id, comic_filename):
         files = {
             'photo': file,
         }
-        response = requests.post(url, files=files)
-        response.raise_for_status()
+        response = requests.post(url, files=files).json()
 
-    return (response.json()['photo'],
-            response.json()['server'],
-            response.json()['hash'])
+    return (response['photo'],
+            response['server'],
+            response['hash'])
 
 
 def save_photo_to_wall(token, group_id, photo, server, hashvalue):
@@ -51,7 +51,6 @@ def save_photo_to_wall(token, group_id, photo, server, hashvalue):
         }
     url = 'https://api.vk.com/method/photos.saveWallPhoto'
     response = requests.post(url, params=payload)
-    response.raise_for_status()
     saved_photo = response.json()['response'][0]
     return (saved_photo['owner_id'], saved_photo['id'])
 
@@ -60,15 +59,13 @@ def post_to_group_wall(token, group_id, owner_id, media_id, comic_title):
     payload = {
         'access_token': token,
         'v': '5.126',
-        'owner_id': '-' + group_id,
+        'owner_id': f'-{group_id}',
         'from_group': 1,
         'attachments': f'photo{owner_id}_{media_id}',
         'message': comic_title
     }
     url = 'https://api.vk.com/method/wall.post'
     response = requests.post(url, params=payload)
-    response.raise_for_status()
-    print(response.json())
 
 
 def main():
@@ -76,13 +73,15 @@ def main():
     token = os.getenv('VK_TOKEN')
     group_id = os.getenv('VK_GROUP_ID')
     comic_filename = 'comic.png'
-    comic_title = get_comic_from_xkcd(comic_filename)
-    photo, server, hashvalue = upload_to_vk_server(token, group_id,
-                                                   comic_filename)
-    owner_id, media_id = save_photo_to_wall(token, group_id, photo, server,
-                                            hashvalue)
-    post_to_group_wall(token, group_id, owner_id, media_id, comic_title)
-    os.remove(comic_filename)
+    try:
+        comic_title = get_comic_from_xkcd(comic_filename)
+        photo, server, hashvalue = upload_to_vk_server(token, group_id,
+                                                       comic_filename)
+        owner_id, media_id = save_photo_to_wall(token, group_id, photo, server,
+                                                hashvalue)
+        post_to_group_wall(token, group_id, owner_id, media_id, comic_title)
+    finally:
+        os.remove(comic_filename)
 
 
 if __name__ == "__main__":
