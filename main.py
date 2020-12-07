@@ -10,12 +10,24 @@ def get_comic_from_xkcd(comic_filename):
     page_number = random.randrange(1, MAX_PAGES)
     url = f'https://xkcd.com/{page_number}/info.0.json'
     response = requests.get(url)
+    if response.ok:
+        response = response.json()
+        picture = requests.get(response['img'])
+        with open(comic_filename, 'wb') as file:
+            file.write(picture.content)
+        return response['alt']
+
     response.raise_for_status()
-    comic = response.json()
-    picture = requests.get(comic['img'])
-    with open(comic_filename, 'wb') as file:
-        file.write(picture.content)
-    return comic['alt']
+
+
+def raise_vk_error(json_response):
+    if 'error' in json_response:
+        for pos in json_response['error']['request_params']:
+            if pos['key'] == 'method':
+                error_tgt = pos['value']
+        error_msg = json_response['error']['error_msg']
+        raise Exception(f'{error_tgt} ---> {error_msg}')
+    return json_response
 
 
 def upload_to_vk_server(token, group_id, comic_filename):
@@ -26,7 +38,9 @@ def upload_to_vk_server(token, group_id, comic_filename):
         }
     url = 'https://api.vk.com/method/photos.getWallUploadServer'
     response = requests.get(url, params=payload)
-    upload_url = response.json()['response']['upload_url']
+    response = response.json()
+    raise_vk_error(response)
+    upload_url = response['response']['upload_url']
 
     with open(comic_filename, 'rb') as file:
         url = upload_url
@@ -51,7 +65,9 @@ def save_photo_to_wall(token, group_id, photo, server, hashvalue):
         }
     url = 'https://api.vk.com/method/photos.saveWallPhoto'
     response = requests.post(url, params=payload)
-    saved_photo = response.json()['response'][0]
+    response = response.json()
+    raise_vk_error(response)
+    saved_photo = response['response'][0]
     return (saved_photo['owner_id'], saved_photo['id'])
 
 
@@ -66,6 +82,7 @@ def post_to_group_wall(token, group_id, owner_id, media_id, comic_title):
     }
     url = 'https://api.vk.com/method/wall.post'
     response = requests.post(url, params=payload)
+    raise_vk_error(response.json())
 
 
 def main():
@@ -80,8 +97,11 @@ def main():
         owner_id, media_id = save_photo_to_wall(token, group_id, photo, server,
                                                 hashvalue)
         post_to_group_wall(token, group_id, owner_id, media_id, comic_title)
+    except Exception as error_msg:
+        print(error_msg)
     finally:
-        os.remove(comic_filename)
+        if os.path.exists(comic_filename):
+            os.remove(comic_filename)
 
 
 if __name__ == "__main__":
