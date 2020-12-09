@@ -10,14 +10,13 @@ def get_comic_from_xkcd(comic_filename):
     page_number = random.randrange(1, MAX_PAGES)
     url = f'https://xkcd.com/{page_number}/info.0.json'
     response = requests.get(url)
+    response.raise_for_status()
     if response.ok:
         response = response.json()
         picture = requests.get(response['img'])
         with open(comic_filename, 'wb') as file:
             file.write(picture.content)
         return response['alt']
-
-    response.raise_for_status()
 
 
 def raise_vk_error(json_response):
@@ -27,7 +26,6 @@ def raise_vk_error(json_response):
                 error_tgt = pos['value']
         error_msg = json_response['error']['error_msg']
         raise Exception(f'{error_tgt} ---> {error_msg}')
-    return json_response
 
 
 def upload_to_vk_server(token, group_id, comic_filename):
@@ -38,20 +36,21 @@ def upload_to_vk_server(token, group_id, comic_filename):
         }
     url = 'https://api.vk.com/method/photos.getWallUploadServer'
     response = requests.get(url, params=payload)
-    response = response.json()
-    raise_vk_error(response)
-    upload_url = response['response']['upload_url']
+    result = response.json()
+    raise_vk_error(result)
+    upload_url = result['response']['upload_url']
 
     with open(comic_filename, 'rb') as file:
         url = upload_url
         files = {
             'photo': file,
         }
-        response = requests.post(url, files=files).json()
+        response = requests.post(url, files=files)
+        result = response.json()
 
-    return (response['photo'],
-            response['server'],
-            response['hash'])
+    return (result['photo'],
+            result['server'],
+            result['hash'])
 
 
 def save_photo_to_wall(token, group_id, photo, server, hashvalue):
@@ -65,9 +64,9 @@ def save_photo_to_wall(token, group_id, photo, server, hashvalue):
         }
     url = 'https://api.vk.com/method/photos.saveWallPhoto'
     response = requests.post(url, params=payload)
-    response = response.json()
-    raise_vk_error(response)
-    saved_photo = response['response'][0]
+    result = response.json()
+    raise_vk_error(result)
+    saved_photo = result['response'][0]
     return (saved_photo['owner_id'], saved_photo['id'])
 
 
