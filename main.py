@@ -11,12 +11,11 @@ def get_comic_from_xkcd(comic_filename):
     url = f'https://xkcd.com/{page_number}/info.0.json'
     response = requests.get(url)
     response.raise_for_status()
-    if response.ok:
-        response = response.json()
-        picture = requests.get(response['img'])
-        with open(comic_filename, 'wb') as file:
-            file.write(picture.content)
-        return response['alt']
+    response = response.json()
+    picture = requests.get(response['img'])
+    with open(comic_filename, 'wb') as file:
+        file.write(picture.content)
+    return response['alt']
 
 
 def raise_vk_error(json_response):
